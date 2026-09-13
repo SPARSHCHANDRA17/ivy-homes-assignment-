@@ -1,0 +1,91 @@
+{
+  "api_key": "IVY26-A78847D9979E",
+  "candidate": {
+    "name": "Sparsh Chandra",
+    "email": "you@mnnit.ac.in", 
+    "repo_url": "https://github.com/SPARSHCHANDRA17/ivy-homes-assignment-.git",
+    "demo_url": "https://your-vercel-deployment.vercel.app"
+  },
+  "answers": {
+    "total_listing_records": 1300,
+    "unique_properties": 1300,
+    "active_listings": 1025,
+    "corrupt_listing_ids": [
+      "100-5000050",
+      "100-5000339",
+      "SQU-5002700",
+      "ZER-5002788"
+    ],
+    "total_monthly_rent": 2137300,
+    "avg_price_per_sqft_2bhk": 62805.58,
+    "costliest_project": {
+      "project_id": "P50016",
+      "price_max_inr": 124400000
+    },
+    "listings_last_7_days": 45,
+    "fake_listing_ids": [
+      "100-5000100",
+      "100-5000101",
+      "100-5000102",
+      "100-5000103",
+      "100-5000104"
+    ],
+    "projects_with_wrong_listing_count": 134
+  },
+  "findings": [
+    {
+      "endpoint": "*",
+      "category": "auth",
+      "documented": "Append API key as a query parameter",
+      "actual": "API requires the key in the X-API-Key request header.",
+      "how_found": "Initial test returned a 401 error explicitly stating 'send your key in the X-API-Key request header'.",
+      "impact": "Critical. All requests fail without this.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/auth/login",
+      "category": "auth",
+      "documented": "Returns token and expires_in: 86400 (24 hours). No refresh flow.",
+      "actual": "Returns access_token, refresh_token, refresh_url, and expires_in: 900 (15 mins).",
+      "how_found": "Inspected the raw JSON response payload from /auth/login.",
+      "impact": "Critical. Sessions drop after 15 minutes if the frontend doesn't implement the undocumented refresh flow.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "pagination",
+      "documented": "Takes page (1-indexed) & limit. Returns total, page, page_size.",
+      "actual": "Takes offset (0-indexed) & limit. Returns limit, offset, count, total, has_more.",
+      "how_found": "Intercepted the JSON shape and error messages while attempting to fetch page 1.",
+      "impact": "High. Causes endless loops or missed records if standard page-based fetching is used.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "completeness",
+      "documented": "Inactive, expired and withdrawn listings are excluded server side.",
+      "actual": "The endpoint leaks 275 inactive listings (is_live: false).",
+      "how_found": "Downloaded the dataset and counted 1300 records, but only 1025 had is_live == true.",
+      "impact": "High. The frontend must implement client-side filtering to avoid showing inactive listings to the user.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/projects",
+      "category": "units",
+      "documented": "Money: Indian rupees, integer, everywhere in the API.",
+      "actual": "price_min and price_max for projects are returned in Crores as floats (e.g., 12.44).",
+      "how_found": "Analyzed project records while hunting for the costliest project.",
+      "impact": "Medium. Displays astronomically cheap housing (₹12) if not converted to rupees on the frontend.",
+      "evidence": ["P50016"]
+    },
+    {
+      "endpoint": "*",
+      "category": "timestamps",
+      "documented": "Timestamps: ISO 8601, UTC, Z suffix, everywhere in the API.",
+      "actual": "Timestamps are returned without timezone information (naive) or offset explicitly to +05:30.",
+      "how_found": "Encountered a comparison error in Python between naive and offset-aware datetimes when calculating listings for the last 7 days.",
+      "impact": "Low, but causes runtime errors in strictly typed backends or analysis scripts.",
+      "evidence": []
+    }
+  ]
+}
